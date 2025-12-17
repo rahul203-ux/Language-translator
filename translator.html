@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>🌍 Simple Translator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f4f4f9;
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    textarea, select, button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      font-size: 16px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    #result {
+      margin-top: 20px;
+      padding: 10px;
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      min-height: 50px;
+      white-space: pre-wrap;
+    }
+    .small {
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <h1>🌍 Translator</h1>
+
+  <textarea id="text" rows="4" placeholder="Enter text to translate..."></textarea>
+
+  <label for="lang">Choose target language:</label>
+  <select id="lang">
+    <option value="hi">Hindi</option>
+    <option value="te">Telugu</option>
+    <option value="fr">French</option>
+    <option value="es">Spanish</option>
+    <option value="de">German</option>
+    <option value="it">Italian</option>
+    <option value="ru">Russian</option>
+    <option value="ja">Japanese</option>
+    <option value="ko">Korean</option>
+    <option value="ar">Arabic</option>
+    <option value="zh">Chinese (Simplified)</option>
+  </select>
+
+  <button id="btn">Translate</button>
+
+  <div id="result">✅ Translated text will appear here...</div>
+  <div class="small" id="note">
+    Note: If requests are blocked by CORS when opened via <code>file://</code>, run a local server using
+    <code>python -m http.server</code> and open <a href="http://localhost:8000" target="_blank">http://localhost:8000</a>.
+  </div>
+
+  <script>
+    const btn = document.getElementById('btn');
+    const resultDiv = document.getElementById('result');
+
+    // ✅ Updated API URL with CORS proxy
+    const url = 'https://corsproxy.io/?https://translate.argosopentech.com/translate';
+
+    function mapLangForLibre(code) {
+      if (code === 'zh-CN') return 'zh';
+      return code;
+    }
+
+    async function translateWithLibre(text, target) {
+      const body = {
+        q: text,
+        source: 'en',
+        target: target,
+        format: 'text'
+      };
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`LibreTranslate error: ${resp.status} ${resp.statusText} - ${txt}`);
+      }
+      const data = await resp.json();
+      return data.translatedText;
+    }
+
+    async function translateWithMyMemory(text, target) {
+      const backupUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|${encodeURIComponent(target)}`;
+      const resp = await fetch(backupUrl);
+      if (!resp.ok) {
+        const txt = await resp.text();
+        throw new Error(`MyMemory error: ${resp.status} ${resp.statusText} - ${txt}`);
+      }
+      const data = await resp.json();
+      return data?.responseData?.translatedText ?? null;
+    }
+
+    async function translateText() {
+      const text = document.getElementById('text').value.trim();
+      const rawTarget = document.getElementById('lang').value;
+      if (!text) {
+        alert('Please enter some text.');
+        return;
+      }
+
+      resultDiv.innerText = '⏳ Translating... Please wait.';
+
+      try {
+        const libreTarget = mapLangForLibre(rawTarget);
+
+        try {
+          const translated = await translateWithLibre(text, libreTarget);
+          resultDiv.innerText = '✅ ' + translated;
+          return;
+        } catch (libErr) {
+          console.warn('LibreTranslate failed, falling back to MyMemory:', libErr);
+        }
+
+        const fallbackTranslated = await translateWithMyMemory(text, rawTarget);
+        if (fallbackTranslated) {
+          resultDiv.innerText = '✅ ' + fallbackTranslated;
+        } else {
+          resultDiv.innerText = '⚠ No translation returned by fallback service.';
+        }
+      } catch (err) {
+        console.error('Translation error:', err);
+        resultDiv.innerText = '❌ Error: ' + (err.message || err);
+      }
+    }
+
+    btn.addEventListener('click', translateText);
+
+    // Allow Ctrl+Enter shortcut
+    document.getElementById('text').addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+        translateText();
+      }
+    });
+  </script>
+</body>
+</html>
